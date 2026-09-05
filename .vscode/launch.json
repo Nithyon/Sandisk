@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "generate_data.py (full run from config.yaml)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/generate_data.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": []
+    },
+    {
+      "name": "generate_data.py (smoke test: 10 wafers)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/generate_data.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "args": ["--num_wafers", "10"]
+    }
+  ]
+}
