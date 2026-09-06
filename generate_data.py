@@ -500,15 +500,19 @@ def print_summary(df, split_name):
     print(f"  Passed:     {n_dies - n_fail:,} ({100 - fail_rate:.2f}%)")
 
     # Feature overlap: compute mean difference / pooled std for each feature
-    feature_cols = [c for c in df.columns if not c.startswith("zone_") and
-                    c not in ("wafer_id", "die_row", "die_col", "label", "neighborhood_fail_density")]
+    # Only evaluate scalar parametric features. `block_readings` is a
+    # high-dimensional array per die; including it or filtering the whole
+    # DataFrame duplicates gigabytes of data just to print a summary.
+    feature_cols = [c for c in df.columns if c.startswith("feature_")]
     if len(feature_cols) > 0:
         print(f"\n  Feature Separability (Cohen's d):")
-        pass_df = df[df["label"] == 0]
-        fail_df = df[df["label"] == 1]
+        pass_mask = df["label"] == 0
+        fail_mask = df["label"] == 1
         for col in feature_cols[:5]:  # Show top 5
-            p_mean, p_std = pass_df[col].mean(), pass_df[col].std()
-            f_mean, f_std = fail_df[col].mean(), fail_df[col].std()
+            pass_values = df.loc[pass_mask, col]
+            fail_values = df.loc[fail_mask, col]
+            p_mean, p_std = pass_values.mean(), pass_values.std()
+            f_mean, f_std = fail_values.mean(), fail_values.std()
             pooled_std = np.sqrt((p_std ** 2 + f_std ** 2) / 2)
             d = abs(f_mean - p_mean) / pooled_std if pooled_std > 0 else 0
             print(f"    {col:20s}: d = {d:.4f} (low = high overlap)")
