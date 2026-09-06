@@ -246,6 +246,27 @@ This is an append-only, chronological record shared by Claude and Codex. New ent
 - Checkpoint commit: Pending; discussion log will be committed and pushed.
 - Blocker/handoff: Resolve Sai Nithin Model A PCA scope before model implementation; proceed meanwhile with shared data audit, spatial features, and fold generation.
 
+## 2026-09-06T15:20:44+05:30 - Codex - DOCKER SETUP
+
+- User prompt (redacted): "can you set iit up on docker"
+- Agent response/decision summary: Added a reproducible Dockerfile, Compose service, Docker build context exclusions, and README instructions. The image built successfully with Python 3.12 and project dependencies; runtime smoke testing is blocked by Docker Desktop's unreadable containerd metadata/content store.
+- Intended action: Containerize the generator while mounting `D:\Datasets\wm811k` read-only and writing outputs to `D:\Sandisk\input`.
+- Checkpoint owner: Codex
+- Previous checkpoint commit: `ddcc7b5`
+- Files examined: Git status/history, `requirements.txt`, `config.yaml`, `README.md`, `.gitignore`, Docker daemon status
+- Files changed: `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `README.md`, `COORDINATION_LOG.md`
+- Commands and tests:
+  - `git status --short --branch; git log -3 --oneline --decorate; Get-Content -LiteralPath .\COORDINATION_LOG.md -Tail 16; Get-Content -LiteralPath .\requirements.txt; Get-Content -LiteralPath .\config.yaml; docker version --format '{{.Server.Version}}'` -> PASS (exit code 0); Docker Server 29.4.3 was reachable; existing uncommitted Claude files were preserved
+  - `docker compose config; docker build --tag sandisk-aiml:latest .` -> PASS (exit code 0); Compose resolved D-drive mounts and image built successfully
+  - `docker run --rm --entrypoint python -v "D:\Datasets\wm811k:/data:ro" sandisk-aiml:latest -c "...load WM-811K..."` -> FAIL (exit code 1); Docker returned `containerd ... meta.db: input/output error`
+  - `docker image inspect sandisk-aiml:latest; docker run --rm hello-world` -> FAIL (exit code 1); content blob and containerd metadata were unreadable
+  - `docker system df; docker info --format 'DockerRootDir={{.DockerRootDir}} Containers={{.Containers}} Images={{.Images}}'` -> FAIL WITH DIAGNOSTIC OUTPUT; Docker reported `DockerRootDir=/var/lib/docker Containers=5 Images=9` but could not retrieve the image list because a content blob was unreadable
+- Result: PARTIAL — image build passed; container run blocked
+- Important output/error: No Docker cleanup, reset, image deletion, or daemon restart was attempted because those actions could destroy existing local Docker state.
+- Base commit: `ddcc7b5`
+- Checkpoint commit: Pending; Docker setup files and this log will be committed and pushed.
+- Blocker/handoff: Restart or repair Docker Desktop's containerd storage, then rerun the documented `docker run` smoke test. The project files and D-drive dataset are healthy.
+
 ## 2026-09-06T14:47:57+05:30 - Codex - PCA DEFINITION DECISION
 
 - User prompt (redacted): "okay settle that definition explain psa"

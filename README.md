@@ -16,6 +16,21 @@ $env:WM811K_PATH = 'D:\Datasets\wm811k\LSWMD.pkl'
 Each contributor should set their own local path rather than committing an
 absolute path to `config.yaml`.
 
+## Docker setup
+
+Docker keeps the Python environment reproducible while the large WM-811K
+pickle stays on D and the generated files are written to the local `input/`
+folder. From PowerShell in `D:\Sandisk`:
+
+```powershell
+docker compose build
+docker compose run --rm generator
+```
+
+The default mounts are `D:\Datasets\wm811k` (read-only) and
+`D:\Sandisk\input` (outputs). To use different locations, set
+`WM811K_DATASET_DIR` and `SANDISK_OUTPUT_DIR` before running Compose.
+
 ## Input Structure
 
 Files are generated in `input/` directory:

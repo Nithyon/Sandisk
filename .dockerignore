@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+input
+cache
+results_*.json
+data/LSWMD.pkl
+*.pkl
+*.csv
+*.parquet
+*.log
