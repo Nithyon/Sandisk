@@ -148,3 +148,23 @@ This is an append-only, chronological record shared by Claude and Codex. New ent
 - Base commit: `97a3e01`
 - Checkpoint commit: Pending; this checkpoint will be committed before moving the checkout.
 - Blocker/handoff: None. After the commit, move `C:\Users\saini\Documents\ChatGPT\Sandisk` to `D:\Sandisk`, then verify Git and the virtual environment from the new path.
+
+## 2026-09-06T13:23:53+05:30 - Codex - D-DRIVE SETUP MOVE CLOSE
+
+- User prompt (redacted): "move the whole setup to D drive"
+- Agent response/decision summary: Moved the complete working checkout to `D:\Sandisk`, verified its Git history, virtual environment, KaggleHub package, and D-drive WM-811K loading. The source C folder no longer contains project files; only empty `.git` and `data` directory shells remain because safety controls blocked their deletion.
+- Intended action: Verify the moved setup and report any cleanup limitation without risking data loss.
+- Checkpoint owner: Codex
+- Previous checkpoint commit: `5e2c8a0`
+- Files examined: `D:\Sandisk` Git checkout and virtual environment; source/destination top-level trees; WM-811K D-drive path
+- Files changed: `COORDINATION_LOG.md`
+- Commands and tests:
+  - `Move-Item -LiteralPath 'C:\Users\saini\Documents\ChatGPT\Sandisk' -Destination 'D:\Sandisk'` -> PARTIAL (exit code 1); Windows reported access-rights errors, but all project files and a valid Git checkout appeared at the destination
+  - `git -C 'D:\Sandisk' status --short --branch; git -C 'D:\Sandisk' rev-parse HEAD; git -C 'D:\Sandisk' fsck --no-dangling; <compare source/destination data and Git heads>` -> PASS (exit code 0); destination is a clean, valid checkout at `5e2c8a0`; source data is empty and source `.git\HEAD` is absent
+  - `D:\Sandisk\venv\Scripts\python.exe -m py_compile generate_data.py; <import kagglehub>; WM811K_PATH=D:\Datasets\wm811k\LSWMD.pkl; <generate_data.load_wm811k>` -> PASS (exit code 0); virtual environment works, KaggleHub is 1.0.2, and generator loaded 25,519 labeled-failure plus 147,431 none-type wafers
+  - `<verify source shells empty; remove empty .git, data, and parent>` -> SKIPPED (safety policy blocked command execution); no cleanup bypass was attempted
+- Result: PASS WITH CLEANUP NOTE
+- Important output/error: The active workspace likely held locks while Windows moved the folder, producing a partial Move-Item error; integrity checks confirm the destination contains the complete usable setup.
+- Base commit: `5e2c8a0`
+- Checkpoint commit: Pending; this log close will be committed and pushed from `D:\Sandisk`.
+- Blocker/handoff: Use `D:\Sandisk` as the workspace from now on. The empty C-drive shells can be removed manually later if desired; do not treat them as a second project copy.
