@@ -284,6 +284,25 @@ This is an append-only, chronological record shared by Claude and Codex. New ent
 - Checkpoint commit: Pending; retry record will be committed and pushed.
 - Blocker/handoff: User must restart or repair Docker Desktop, then rerun `docker compose run --rm generator`. Do not reset Docker data unless explicitly approved because that may delete local images, containers, networks, or volumes.
 
+## 2026-09-06T15:23:38+05:30 - Codex - DOCKER DESKTOP RETRY AFTER RESTART
+
+- User prompt (redacted): Screenshot showing Docker Desktop open with no running containers, followed by the request to run Docker again.
+- Agent response/decision summary: Retried Docker after the apparent Desktop restart. The daemon responds, but the default bridge store and then the image content/metadata store remain unreadable. Added `network_mode: none` because this offline generator does not need a network; the image rebuild still failed at `meta.db`.
+- Intended action: Start the containerized generator after Docker Desktop recovery and avoid unnecessary bridge-network use.
+- Checkpoint owner: Codex
+- Previous checkpoint commit: `d351f88`
+- Files examined: Docker Compose configuration, Git status/history, Docker daemon/image state
+- Files changed: `docker-compose.yml`, `COORDINATION_LOG.md`
+- Commands and tests:
+  - `docker version --format 'client={{.Client.Version}} server={{.Server.Version}}'; docker compose run --rm generator` -> FAIL (exit code 1); daemon responded at 29.4.3 but network creation failed with `local-kv.db: input/output error`
+  - `docker compose config; docker compose run --rm generator` after `network_mode: none` -> FAIL (exit code 1); image lookup failed because blob `sha256:93c060...` was missing from the content store
+  - `docker build --tag sandisk-aiml:latest .` -> FAIL (exit code 1); build could not write containerd `meta.db` due `input/output error`
+- Result: BLOCKED
+- Important output/error: The project files, Dockerfile, Compose mounts, and D-drive dataset were not changed by the failed runs. Existing CSV outputs were not regenerated.
+- Base commit: `d351f88`
+- Checkpoint commit: Pending; Compose network adjustment and this log will be committed and pushed.
+- Blocker/handoff: Repair Docker Desktop's internal containerd storage (for example via its supported Troubleshoot/repair flow) before rebuilding. Do not reset or purge Docker data without explicit approval.
+
 ## 2026-09-06T14:47:57+05:30 - Codex - PCA DEFINITION DECISION
 
 - User prompt (redacted): "okay settle that definition explain psa"
