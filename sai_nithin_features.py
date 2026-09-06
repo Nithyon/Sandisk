@@ -121,6 +121,13 @@ def load_split(csv_path, cache_tag, need_blocks, nrows=None):
 
     dtypes = {c: "float32" for c in FEATURE_COLS}
     dtypes.update({"die_row": "int32", "die_col": "int32", "old_label": "int8", "label": "int8"})
+    if need_blocks:
+        # pandas 3.x defaults text columns to a PyArrow-backed string array, which
+        # tries to materialize the entire ~2000-value block_readings column as one
+        # contiguous Arrow buffer and raises ArrowMemoryError on ~150k+ rows. Force
+        # plain-object dtype for this one column so pandas keeps it as a normal
+        # Python string per cell instead.
+        dtypes["block_readings"] = "object"
 
     df = pd.read_csv(csv_path, usecols=usecols, dtype=dtypes, nrows=nrows)
     timings["read_csv"] = time.time() - t0

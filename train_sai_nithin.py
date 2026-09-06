@@ -20,11 +20,11 @@ Usage:
     venv\\Scripts\\python.exe train_sai_nithin.py --model logreg --stage A --smoke 5000
 """
 import argparse
+import gc
 import time
 import json
 import numpy as np
 from sklearn.model_selection import GroupKFold
-from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -40,6 +40,34 @@ RANDOM_STATE = 42
 PCA_CANDIDATES = [50, 100, 150]  # candidate component counts, picked by val fail-F1
 
 
+def _standardize_f32(X_train, X_eval):
+    """
+    Lean float32 standardization (fit on train only), used instead of
+    sklearn's StandardScaler. StandardScaler upcasts to float64 internally
+    (see _incremental_mean_and_var), which on the 2000-column block matrix
+    doubles peak memory and can OOM on a machine with only a few GB free.
+    Keeping everything float32 halves that peak.
+    """
+    mean = X_train.mean(axis=0, dtype=np.float32)
+    std = X_train.std(axis=0, dtype=np.float32)
+    std[std == 0] = 1.0
+    return (X_train - mean) / std, (X_eval - mean) / std
+
+
+def _pca_transform(X_train, X_eval, n_components, wide):
+    """Fit PCA on train only, transform both. `wide=True` (the 2000-column
+    block branch) uses randomized SVD, which is far cheaper in memory and
+    time than full SVD when extracting few components from many columns."""
+    pca = PCA(
+        n_components=n_components,
+        svd_solver="randomized" if wide else "auto",
+        random_state=RANDOM_STATE,
+    )
+    train_t = pca.fit_transform(X_train).astype(np.float32)
+    eval_t = pca.transform(X_eval).astype(np.float32)
+    return train_t, eval_t
+
+
 def build_representation(X_param_train, X_spatial_train, X_block_train,
                           X_param_eval, X_spatial_eval, X_block_eval,
                           stage, n_components_param, n_components_block=None):
@@ -48,19 +76,24 @@ def build_representation(X_param_train, X_spatial_train, X_block_train,
     Model A: PCA(param) + spatial.
     Model B: PCA(param) + spatial + PCA(block)  [separately fitted PCA on blocks]
     """
-    param_scaler = StandardScaler().fit(X_param_train)
-    param_pca = PCA(n_components=n_components_param, random_state=RANDOM_STATE)
-    param_pca.fit(param_scaler.transform(X_param_train))
+    param_train_s, param_eval_s = _standardize_f32(X_param_train, X_param_eval)
+    param_train_pca, param_eval_pca = _pca_transform(
+        param_train_s, param_eval_s, n_components_param, wide=False
+    )
+    del param_train_s, param_eval_s
 
-    train_parts = [param_pca.transform(param_scaler.transform(X_param_train)), X_spatial_train]
-    eval_parts = [param_pca.transform(param_scaler.transform(X_param_eval)), X_spatial_eval]
+    train_parts = [param_train_pca, X_spatial_train]
+    eval_parts = [param_eval_pca, X_spatial_eval]
 
     if stage == "B":
-        block_scaler = StandardScaler().fit(X_block_train)
-        block_pca = PCA(n_components=n_components_block, random_state=RANDOM_STATE)
-        block_pca.fit(block_scaler.transform(X_block_train))
-        train_parts.append(block_pca.transform(block_scaler.transform(X_block_train)))
-        eval_parts.append(block_pca.transform(block_scaler.transform(X_block_eval)))
+        block_train_s, block_eval_s = _standardize_f32(X_block_train, X_block_eval)
+        block_train_pca, block_eval_pca = _pca_transform(
+            block_train_s, block_eval_s, n_components_block, wide=True
+        )
+        del block_train_s, block_eval_s
+        train_parts.append(block_train_pca)
+        eval_parts.append(block_eval_pca)
+        gc.collect()
 
     return np.hstack(train_parts), np.hstack(eval_parts)
 
@@ -120,6 +153,8 @@ def cross_validate(X_param, X_spatial, X_block, y, groups, stage, model_name):
             model = make_model(model_name)
             model.fit(X_tr, y[tr_idx])
             oof_prob[va_idx] = model.predict_proba(X_va)[:, 1]
+            del Xb_tr, Xb_va, X_tr, X_va, model
+            gc.collect()
 
         t, f1 = best_threshold(y, oof_prob)
         results_by_ncomp[n_param] = {"threshold": t, "f1": f1, "n_block": n_block}
@@ -151,11 +186,23 @@ def main():
     args = ap.parse_args()
 
     need_blocks = args.stage == "B"
+    # Smoke runs (--smoke N) must never read or write the same cache files as a
+    # real full-dataset run -- a shared cache_tag would let a stale N-row cache
+    # silently satisfy a full run's `os.path.exists` check (or vice versa).
+    train_tag = "train" if args.smoke is None else f"train_smoke{args.smoke}"
+    test_tag = "test" if args.smoke is None else f"test_smoke{args.smoke}"
 
     t0 = time.time()
-    train = load_split("input/train.csv", "train", need_blocks, nrows=args.smoke)
-    test = load_split("input/test.csv", "test", need_blocks, nrows=args.smoke)
+    train = load_split("input/train.csv", train_tag, need_blocks, nrows=args.smoke)
+    test = load_split("input/test.csv", test_tag, need_blocks, nrows=args.smoke)
     load_time = time.time() - t0
+
+    assert len(train["meta"]) == len(train["X_spatial"]) == \
+        (len(train["X_block"]) if need_blocks else len(train["meta"])), \
+        "train row-count mismatch between meta/spatial/block arrays -- cache corruption"
+    assert len(test["meta"]) == len(test["X_spatial"]) == \
+        (len(test["X_block"]) if need_blocks else len(test["meta"])), \
+        "test row-count mismatch between meta/spatial/block arrays -- cache corruption"
 
     tr_meta, te_meta = train["meta"], test["meta"]
 
