@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 input/
 data/LSWMD.pkl
+cache/
+results_*.json

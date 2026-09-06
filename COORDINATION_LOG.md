@@ -263,3 +263,28 @@ This is an append-only, chronological record shared by Claude and Codex. New ent
 - Base commit: `b2df300`
 - Checkpoint commit: Pending; discussion log will be committed and pushed.
 - Blocker/handoff: The Model B tracker note should eventually be clarified from "keep 500 parametric uncompressed" to "reuse the exact Model A die-plus-spatial branch" so the sheet matches this controlled A/B definition.
+
+## 2026-09-06T14:55:43+05:30 - Claude - SAI NITHIN PIPELINE IMPLEMENTATION
+
+- User prompt (redacted): "go ahead and write the code also do my gpu is good?"
+- Agent response/decision summary: Implemented Sai Nithin's four tracker experiments (PCA + Logistic Regression, PCA + XGBoost; Model A and Model B) using the settled PCA definition from the previous checkpoint (Model A = PCA(500 parametric features) + uncompressed spatial features; Model B = exact Model A representation + separately fold-fitted PCA(2000 block readings)). Checked GPU: NVIDIA RTX 5070 Laptop, 8GB VRAM, CUDA 13.1 -- above the tracker's assumed RTX 4060-5050 baseline, sufficient for XGBoost GPU training (device="cuda") at this dataset size. Installed xgboost (was missing from the venv) and added it to requirements.txt.
+- Intended action: Provide a working, leakage-safe pipeline for all four assigned experiments, verified end-to-end on a small row subset before any full run, without touching files owned by other checkpoints.
+- Checkpoint owner: Claude
+- Previous checkpoint commit: `ddcc7b5`
+- Files examined: COORDINATION_LOG.md (all entries), CLAUDE.md, generate_data.py, config.yaml, input/test.csv header, requirements.txt, .gitignore, Google Sheet "Copy of Die Yield Model Comparison Tracker" (owner sainithinpokala@gmail.com) rows for Sai Nithin and the shared "How to fill this sheet" rules
+- Files changed: `sai_nithin_features.py` (new), `train_sai_nithin.py` (new), `requirements.txt`, `.gitignore`
+- Commands and tests:
+  - `git status --short --branch; tail COORDINATION_LOG.md` -> PASS (exit code 0); repository was clean and synchronized at `ddcc7b5`
+  - `nvidia-smi` -> PASS (exit code 0); RTX 5070 Laptop GPU, 8151MiB VRAM, driver 592.07, CUDA 13.1, mostly idle
+  - `venv\Scripts\python.exe -m pip install xgboost` -> PASS (exit code 0); installed xgboost 3.4.1
+  - `venv\Scripts\python.exe -m py_compile sai_nithin_features.py train_sai_nithin.py` -> PASS (exit code 0)
+  - `venv\Scripts\python.exe train_sai_nithin.py --model logreg --stage A --smoke 8000` -> PASS (exit code 0); OOF fail-F1=0.5400, test fail-F1=0.494
+  - `venv\Scripts\python.exe train_sai_nithin.py --model logreg --stage B --smoke 8000` -> PASS (exit code 0); OOF fail-F1=0.5307, test fail-F1=0.488
+  - `venv\Scripts\python.exe train_sai_nithin.py --model xgboost --stage A --smoke 8000` -> PASS (exit code 0); OOF fail-F1=0.5415, test fail-F1=0.496; GPU engaged with a harmless device-copy warning (cuda booster predicting on a CPU numpy array falls back to DMatrix -- correct result, minor perf cost only)
+  - `venv\Scripts\python.exe train_sai_nithin.py --model xgboost --stage B --smoke 8000` -> PASS (exit code 0); OOF fail-F1=0.5435, test fail-F1=0.490
+  - `git diff --check; grep -inE "api[_-]?key|secret|password|token|BEGIN (RSA|OPENSSH|PRIVATE)" sai_nithin_features.py train_sai_nithin.py requirements.txt .gitignore` -> PASS (exit code 0); no whitespace errors, no credential patterns found
+- Result: PASS
+- Important output/error: Smoke-test metrics above are on an 8000-row subset only (not the full 173k/39k eligible-die sets) and exist solely to verify correctness; they are not the tracker's real results and were deleted (`results_*.json`, `cache/`) before this commit rather than reported to the sheet. `cache/` and `results_*.json` added to `.gitignore` since they are generated artifacts. Full-dataset runs (no `--smoke` flag) still need to be executed to get real tracker numbers, and will take materially longer than the smoke test -- particularly Model B, which parses and PCA-fits the full 2000-column block matrix for 173k+39k rows.
+- Base commit: `ddcc7b5`
+- Checkpoint commit: Pending; this checkpoint will be committed and pushed next.
+- Blocker/handoff: None. Next owner (or Sai Nithin directly) can run `venv\Scripts\python.exe train_sai_nithin.py --model <logreg|xgboost> --stage <A|B>` (no `--smoke`) for each of the four real experiment rows, then transcribe `results_<model>_<stage>.json` into the tracker's yellow cells. First real run per stage will also populate `cache/` so subsequent runs of the other model on the same stage skip re-parsing spatial features / block readings.
