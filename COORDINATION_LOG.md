@@ -382,3 +382,14 @@ This is an append-only, chronological record shared by Claude and Codex. New ent
 - Important output/error: Docker CLI now hangs rather than returning the prior `local-kv.db`/`meta.db` I/O error; engine/service repair is still required.
 - Commit hash: Pending.
 - Blocker/handoff: Repair/restart Docker Desktop's Linux engine/service through its UI, then rerun `docker compose build` and `docker compose run --rm generator`. No destructive reset was performed.
+
+## 2026-09-06T15:55:47+05:30 - Codex - POST-RESTART DOCKER CHECK
+
+- User prompt (redacted): "now check" (verify Docker after restart)
+- Intended action: Check Docker client/engine, WSL backend, and image availability; owner Codex.
+- Files examined: Git status, Docker CLI, WSL distributions, Docker Desktop processes.
+- Commands and tests: `git status --short --branch` -> PASS (exit 0), clean; `docker version`, `docker info`, `docker image inspect sandisk-aiml:latest` -> FAIL (exit 1), `dockerDesktopLinuxEngine` pipe missing; `wsl --list --verbose` -> PASS (exit 0), `docker-desktop` stopped; process check -> PASS (exit 0), Docker Desktop/backend not running.
+- Result: BLOCKED; Compose generator was not run and outputs were unchanged.
+- Important output/error: Windows Docker client responds, but the Linux engine is stopped and its named pipe is unavailable.
+- Commit hash: Pending.
+- Blocker/handoff: Reopen Docker Desktop and wait for the Linux engine to show Running. If it immediately stops again, use Docker Desktop Troubleshoot/Restart and capture the displayed error; do not factory-reset without approval.
