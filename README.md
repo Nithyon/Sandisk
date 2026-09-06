@@ -27,6 +27,13 @@ docker compose build
 docker compose run --rm generator
 ```
 
+The service exposes all host NVIDIA GPUs. The generator itself is CPU-bound;
+for CUDA-enabled XGBoost training, override the command, for example:
+
+```powershell
+docker compose run --rm generator python train_sai_nithin.py --model xgboost --stage A
+```
+
 The default mounts are `D:\Datasets\wm811k` (read-only) and
 `D:\Sandisk\input` (outputs). To use different locations, set
 `WM811K_DATASET_DIR` and `SANDISK_OUTPUT_DIR` before running Compose.
