@@ -1,0 +1,16 @@
+services:
+  generator:
+    build:
+      context: .
+    image: sandisk-aiml:latest
+    environment:
+      WM811K_PATH: /data/LSWMD.pkl
+    volumes:
+      - type: bind
+        source: "${WM811K_DATASET_DIR:-D:/Datasets/wm811k}"
+        target: /data
+        read_only: true
+      - type: bind
+        source: "${SANDISK_OUTPUT_DIR:-D:/Sandisk/input}"
+        target: /workspace/input
+    command: ["python", "generate_data.py"]
