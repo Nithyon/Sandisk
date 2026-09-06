@@ -58,10 +58,12 @@ def label_for(row):
 
 
 def plot_bar_by_metric(rows, metric, title, filename, xlim=None):
+    MODEL_A_COLOR, MODEL_B_COLOR = "#4C72B0", "#DD8452"
+
     rows_sorted = sorted(rows, key=lambda r: r[metric])
     labels = [label_for(r) for r in rows_sorted]
     values = [r[metric] for r in rows_sorted]
-    colors = ["#4C72B0" if r["stage"] == "A" else "#DD8452" for r in rows_sorted]
+    colors = [MODEL_A_COLOR if r["stage"] == "A" else MODEL_B_COLOR for r in rows_sorted]
 
     fig, ax = plt.subplots(figsize=(10, max(6, 0.32 * len(rows_sorted))))
     bars = ax.barh(labels, values, color=colors)
@@ -73,7 +75,14 @@ def plot_bar_by_metric(rows, metric, title, filename, xlim=None):
     if xlim:
         ax.set_xlim(*xlim)
     ax.set_xlabel(title)
-    ax.set_title(f"{title} by experiment\nblue = Model A, orange = Model B")
+    ax.set_title(f"{title} by experiment")
+
+    from matplotlib.patches import Patch
+    legend_handles = [
+        Patch(facecolor=MODEL_A_COLOR, label="Model A"),
+        Patch(facecolor=MODEL_B_COLOR, label="Model B"),
+    ]
+    ax.legend(handles=legend_handles, loc="lower right", fontsize=8)
     ax.grid(axis="x", alpha=0.3)
     fig.tight_layout()
 
@@ -108,17 +117,31 @@ def plot_ab_delta(rows):
     y = range(len(pairs_data))
     height = 0.38
 
-    f1_colors = ["#2ca02c" if v >= 0 else "#d62728" for v in f1_deltas]
-    roc_colors = ["#98df8a" if v >= 0 else "#ff9896" for v in roc_deltas]
+    F1_UP, F1_DOWN = "#2ca02c", "#d62728"       # F1 delta: dark green / dark red
+    ROC_UP, ROC_DOWN = "#98df8a", "#ff9896"     # ROC-AUC delta: light green / light red
 
-    ax.barh([yi + height / 2 for yi in y], f1_deltas, height=height, color=f1_colors, label="F1 delta (B - A)")
-    ax.barh([yi - height / 2 for yi in y], roc_deltas, height=height, color=roc_colors, label="ROC-AUC delta (B - A)")
+    f1_colors = [F1_UP if v >= 0 else F1_DOWN for v in f1_deltas]
+    roc_colors = [ROC_UP if v >= 0 else ROC_DOWN for v in roc_deltas]
+
+    ax.barh([yi + height / 2 for yi in y], f1_deltas, height=height, color=f1_colors)
+    ax.barh([yi - height / 2 for yi in y], roc_deltas, height=height, color=roc_colors)
     ax.axvline(0, color="black", linewidth=0.8)
     ax.set_yticks(list(y))
     ax.set_yticklabels(labels)
-    ax.set_xlabel("Change from Model A to Model B (positive = improvement)")
-    ax.set_title("Model A -> Model B: F1 and ROC-AUC delta per approach\n(green/light-green = improved, red/light-red = regressed)")
-    ax.legend(loc="lower right", fontsize=8)
+    ax.set_xlabel("Change from Model A to Model B (positive = improvement, negative = regression)")
+    ax.set_title("Model A -> Model B: F1 and ROC-AUC delta per approach")
+
+    # Explicit 4-entry legend -- one swatch per (metric, direction) combination actually
+    # used in the chart, since a plain 2-entry legend (one per metric) can't show that
+    # each metric has a separate "improved" vs "regressed" color.
+    from matplotlib.patches import Patch
+    legend_handles = [
+        Patch(facecolor=F1_UP, label="F1 delta -- improved"),
+        Patch(facecolor=F1_DOWN, label="F1 delta -- regressed"),
+        Patch(facecolor=ROC_UP, label="ROC-AUC delta -- improved"),
+        Patch(facecolor=ROC_DOWN, label="ROC-AUC delta -- regressed"),
+    ]
+    ax.legend(handles=legend_handles, loc="lower right", fontsize=8)
     ax.grid(axis="x", alpha=0.3)
     fig.tight_layout()
 
