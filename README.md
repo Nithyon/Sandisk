@@ -84,12 +84,18 @@ W_F_0001,5,13,1
 
 - `predicted_label`: 0=pass, 1=fail (for ALL dies, including old fails)
 
-## Generate the final submission
+## Benchmark Models A and B and generate submissions
 
-The selected model is PCA + Logistic Regression, Model B. The command below reselects the PCA dimensions and failure threshold with wafer-grouped cross-validation, refits on all eligible training dies, and scores the unlabeled validation split:
+The command below benchmarks PCA + Logistic Regression independently for Model A and Model B with wafer-grouped cross-validation. It then refits both models on all eligible training dies and scores the same unlabeled validation split:
 
 ```powershell
 python generate_final_submission.py
 ```
 
-The output is `submission_pca_logreg_b.csv`. It contains exactly the four required columns and forces every row with `old_label=1` to `predicted_label=1`.
+Outputs:
+
+- `benchmark_final_ab.csv`: comparable out-of-fold metrics and selected settings
+- `submission_pca_logreg_a.csv` and `submission_pca_logreg_b.csv`: validation predictions
+- `models/pca_logreg_model_a.joblib` and `models/pca_logreg_model_b.joblib`: fitted preprocessing and classifier bundles
+
+Both submissions contain exactly the four required columns and force every row with `old_label=1` to `predicted_label=1`. Use `--stages A` or `--stages B` to run only one representation.
