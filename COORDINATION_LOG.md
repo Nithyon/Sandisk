@@ -245,3 +245,21 @@ This is an append-only, chronological record shared by Claude and Codex. New ent
 - Base commit: `4f2d320`
 - Checkpoint commit: Pending; discussion log will be committed and pushed.
 - Blocker/handoff: Resolve Sai Nithin Model A PCA scope before model implementation; proceed meanwhile with shared data audit, spatial features, and fold generation.
+
+## 2026-09-06T14:47:57+05:30 - Codex - PCA DEFINITION DECISION
+
+- User prompt (redacted): "okay settle that definition explain psa"
+- Agent response/decision summary: Interpreted PSA as PCA and settled Sai Nithin's experiment definition: Model A applies fold-fitted PCA to the standardized 500 parametric features while retaining spatial features separately; Model B reuses that exact Model A representation and adds a separately fold-fitted PCA representation of the 2,000 block readings. This isolates the incremental value of block data.
+- Intended action: Remove the tracker ambiguity while preserving leakage safety, A/B comparability, and spatial interpretability.
+- Checkpoint owner: Codex
+- Previous checkpoint commit: `b2df300`
+- Files examined: Latest coordination entry and previously verified Tracker rows 30-33
+- Files changed: `COORDINATION_LOG.md`
+- Commands and tests:
+  - `git status --short --branch; git log -2 --oneline --decorate; Get-Content -LiteralPath .\COORDINATION_LOG.md -Tail 12; Get-Date -Format "yyyy-MM-ddTHH:mm:ssK"` -> PASS (exit code 0); repository was clean and synchronized at `b2df300`
+  - Project code/model tests -> SKIPPED (exit code N/A); architecture decision only
+- Result: PASS
+- Important output/error: Fit scalers and PCA inside each training fold only. Leave spatial features outside PCA. Determine component counts from training-fold explained variance and validate them; do not inspect validation or test data while fitting PCA.
+- Base commit: `b2df300`
+- Checkpoint commit: Pending; discussion log will be committed and pushed.
+- Blocker/handoff: The Model B tracker note should eventually be clarified from "keep 500 parametric uncompressed" to "reuse the exact Model A die-plus-spatial branch" so the sheet matches this controlled A/B definition.
