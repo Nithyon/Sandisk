@@ -3,6 +3,9 @@ services:
     build:
       context: .
     image: sandisk-aiml:latest
+    # The generator reads a local mounted dataset and does not need network
+    # access. Avoid Docker Desktop's broken default bridge store.
+    network_mode: "none"
     environment:
       WM811K_PATH: /data/LSWMD.pkl
     volumes:
