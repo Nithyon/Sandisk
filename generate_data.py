@@ -573,8 +573,10 @@ def main():
     # Initialize RNG with seed
     rng = np.random.default_rng(config["seed"])
 
-    # Load WM-811K
-    labeled_df, none_df = load_wm811k(config["wm811k_path"])
+    # Load WM-811K. WM811K_PATH permits a local dataset location without
+    # committing a machine-specific absolute path to config.yaml.
+    wm811k_path = os.environ.get("WM811K_PATH", config["wm811k_path"])
+    labeled_df, none_df = load_wm811k(wm811k_path)
 
     # Select wafers for train and test
     print(f"\nSelecting {n_train} train + {n_test} test wafers...")

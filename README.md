@@ -1,5 +1,21 @@
 # Synthetic Die-Level Feature Generator for Hackathon
 
+## WM-811K dataset setup
+
+Download `LSWMD.pkl` from the WM-811K Kaggle dataset. Keep it outside Git; it
+is ignored by `.gitignore`. The default location is `data/LSWMD.pkl`.
+
+If the dataset is stored elsewhere, set `WM811K_PATH` before running the
+generator. For this machine's D-drive download:
+
+```powershell
+$env:WM811K_PATH = 'D:\Datasets\wm811k\LSWMD.pkl'
+.\venv\Scripts\python.exe generate_data.py
+```
+
+Each contributor should set their own local path rather than committing an
+absolute path to `config.yaml`.
+
 ## Input Structure
 
 Files are generated in `input/` directory:
