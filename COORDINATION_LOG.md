@@ -207,3 +207,23 @@ This is an append-only, chronological record shared by Claude and Codex. New ent
 - Base commit: `aab9632`
 - Checkpoint commit: Pending; discussion log will be committed and pushed.
 - Blocker/handoff: None. Next implementation checkpoint should audit data/schema and build shared wafer-grouped folds before training models.
+
+## 2026-09-06T14:33:03+05:30 - Codex - TRACKER-CENTERED PLAN REVIEW
+
+- User prompt (redacted): "did you check the excel yesterday i want you to emphasis on that part"
+- Agent response/decision summary: Re-read the live Google Sheet as a read-only XLSX snapshot and revised the project emphasis around the actual experiment ownership, priorities, evaluation rules, and blank Leaderboard rather than a generic Model A/Model B diagram.
+- Intended action: Explain the verified tracker-centered work plan without editing the Google Sheet.
+- Checkpoint owner: Codex
+- Previous checkpoint commit: `7804bbd`
+- Files examined: Google Sheet `Copy of Die Yield Model Comparison Tracker`, Tracker rows 1-55, Leaderboard rows 1-38, Git status/history
+- Files changed: `COORDINATION_LOG.md`
+- Commands and tests:
+  - Google Sheets document-session discovery -> SKIPPED (no connected Sheets document session); used the authorized read-only browser export fallback
+  - Read-only Google Sheets XLSX export and local workbook inspection -> PASS; confirmed experiment rows, team assignments, priority notes, shared evaluation rules, and blank leaderboard
+  - `git status --short --branch; git log -2 --oneline --decorate; Get-Date -Format "yyyy-MM-ddTHH:mm:ssK"` -> PASS (exit code 0); repository was clean and synchronized at `7804bbd`
+  - Project code/model tests -> SKIPPED (exit code N/A); no executable files or sheet cells were changed
+- Result: PASS
+- Important output/error: Preetha owns A1-B6 with B3a and B5 prioritized; Sai Harshith owns four ML families in A/B form; Lohit owns SVM and PCA+KNN A/B; Sai Nithin owns PCA+Logistic Regression and PCA+XGBoost A/B. All must use eligible dies, spatial-before-filter, GroupKFold(5), validation threshold tuning, and fail-class F1 with PR-AUC tie-break.
+- Base commit: `7804bbd`
+- Checkpoint commit: Pending; discussion log will be committed and pushed.
+- Blocker/handoff: Clarify what PCA should transform in Sai Nithin's Model A rows before implementing them; the tracker explicitly defines block-only PCA for Model B but leaves Model A PCA scope unstated.
