@@ -168,3 +168,24 @@ This is an append-only, chronological record shared by Claude and Codex. New ent
 - Base commit: `5e2c8a0`
 - Checkpoint commit: Pending; this log close will be committed and pushed from `D:\Sandisk`.
 - Blocker/handoff: Use `D:\Sandisk` as the workspace from now on. The empty C-drive shells can be removed manually later if desired; do not treat them as a second project copy.
+
+## 2026-09-06T14:25:12+05:30 - Codex - FULL DATASET GENERATION
+
+- User prompt (redacted): Screenshot setup steps followed by "do it" and "do it"
+- Agent response/decision summary: Ran the full 160-train/40-test generator using the extracted D-drive WM-811K dataset. The first run created all in-memory data but failed during summary printing because it copied the high-dimensional `block_readings` column. Fixed the summary to use only scalar `feature_*` columns, verified the fix, reran successfully, and validated the generated CSV outputs.
+- Intended action: Produce the project training, test, and validation datasets without overwriting an existing input directory.
+- Checkpoint owner: Codex
+- Previous checkpoint commit: `f2ac982`
+- Files examined: Git status, latest coordination entry, `generate_data.py`, `input/` output directory, generated CSV headers and sizes
+- Files changed: `generate_data.py`, `COORDINATION_LOG.md`; generated `input/train.csv`, `input/test.csv`, and `input/validation.csv` are ignored by Git
+- Commands and tests:
+  - `git status --short --branch; git log -2 --oneline --decorate; Get-Content -LiteralPath .\COORDINATION_LOG.md -Tail 16; Test-Path .\input` -> PASS (exit code 0); repository was clean and no input directory existed
+  - `WM811K_PATH=D:\Datasets\wm811k\LSWMD.pkl; .\venv\Scripts\python.exe generate_data.py` -> FAIL (exit code 1); completed train/test feature generation but `print_summary()` attempted to filter the entire frame including `block_readings`, raising `pyarrow.lib.ArrowMemoryError: malloc of size 2250611712 failed`
+  - `python -m py_compile generate_data.py; <print_summary smoke test with 2,000-value block arrays>` -> PASS (exit code 0); the fix restricts Cohen's d to `feature_*` scalar columns and filters one scalar series at a time
+  - `WM811K_PATH=D:\Datasets\wm811k\LSWMD.pkl; .\venv\Scripts\python.exe generate_data.py` -> PASS (exit code 0); generated 160 train and 40 test wafers, then saved all CSV outputs
+  - `<verify nonzero sizes and CSV header label layout>; Get-PSDrive -Name D; git status --short --branch` -> PASS (exit code 0); train is 3.62 GB with `label`, test is 0.82 GB with `label`, validation is 0.82 GB without `label`, and D has 891.29 GB free
+- Result: PASS
+- Important output/error: Generated data remains local and ignored by Git. Full-run summaries: train has 173,099 dies (25,581 failed, 14.78%); test has 39,351 dies (8,133 failed, 20.67%).
+- Base commit: `f2ac982`
+- Checkpoint commit: Pending; source fix and log will be committed after final verification.
+- Blocker/handoff: None. Next owner can use `D:\Sandisk\input\train.csv`, `test.csv`, and `validation.csv` for modeling; set `WM811K_PATH` when regenerating.
