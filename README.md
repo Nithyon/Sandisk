@@ -83,3 +83,13 @@ W_F_0001,5,13,1
 ```
 
 - `predicted_label`: 0=pass, 1=fail (for ALL dies, including old fails)
+
+## Generate the final submission
+
+The selected model is PCA + Logistic Regression, Model B. The command below reselects the PCA dimensions and failure threshold with wafer-grouped cross-validation, refits on all eligible training dies, and scores the unlabeled validation split:
+
+```powershell
+python generate_final_submission.py
+```
+
+The output is `submission_pca_logreg_b.csv`. It contains exactly the four required columns and forces every row with `old_label=1` to `predicted_label=1`.
