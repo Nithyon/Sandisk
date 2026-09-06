@@ -5,3 +5,8 @@ input/
 data/LSWMD.pkl
 cache/
 results_*.json
+
+# Local-only agent coordination instructions/logs; never publish these.
+AGENTS.md
+CLAUDE.md
+COORDINATION_LOG.md
