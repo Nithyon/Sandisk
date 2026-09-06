@@ -227,3 +227,21 @@ This is an append-only, chronological record shared by Claude and Codex. New ent
 - Base commit: `7804bbd`
 - Checkpoint commit: Pending; discussion log will be committed and pushed.
 - Blocker/handoff: Clarify what PCA should transform in Sai Nithin's Model A rows before implementing them; the tracker explicitly defines block-only PCA for Model B but leaves Model A PCA scope unstated.
+
+## 2026-09-06T14:35:26+05:30 - Codex - PLAN EVOLUTION RATIONALE
+
+- User prompt (redacted): "what we thought before this and what it is now give me the reasoning"
+- Agent response/decision summary: Compared the earlier generic two-model pipeline with the tracker-centered experiment program and explained why shared preprocessing, leakage-safe folds, assigned parallel model lanes, validation threshold tuning, and controlled leaderboard selection must now determine execution order.
+- Intended action: Preserve the reasoning behind the updated project plan so Claude, Codex, and contributors follow the same scientific comparison design.
+- Checkpoint owner: Codex
+- Previous checkpoint commit: `4f2d320`
+- Files examined: Latest coordination entry and previously verified Tracker/Leaderboard snapshot
+- Files changed: `COORDINATION_LOG.md`
+- Commands and tests:
+  - `git status --short --branch; git log -2 --oneline --decorate; Get-Content -LiteralPath .\COORDINATION_LOG.md -Tail 12; Get-Date -Format "yyyy-MM-ddTHH:mm:ssK"` -> PASS (exit code 0); repository was clean and synchronized at `4f2d320`
+  - Project code/model tests -> SKIPPED (exit code N/A); reasoning-only checkpoint
+- Result: PASS
+- Important output/error: The earlier plan correctly described the data flow but underrepresented the tracker’s experimental controls, ownership, priorities, ablations, caching rules, and final selection process.
+- Base commit: `4f2d320`
+- Checkpoint commit: Pending; discussion log will be committed and pushed.
+- Blocker/handoff: Resolve Sai Nithin Model A PCA scope before model implementation; proceed meanwhile with shared data audit, spatial features, and fold generation.
