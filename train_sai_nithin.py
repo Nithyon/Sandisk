@@ -98,22 +98,48 @@ def build_representation(X_param_train, X_spatial_train, X_block_train,
     return np.hstack(train_parts), np.hstack(eval_parts)
 
 
-def make_model(model_name):
+# XGBoost's fixed hyperparameters. Two things were tried on top of this and
+# both regressed fail-F1 rather than improving it (see COORDINATION_LOG.md,
+# "XGBOOST TUNING ATTEMPT" checkpoint for full numbers):
+#   1. Early stopping (eval_set on the CV validation fold, eval_metric="aucpr")
+#      fires after only 11-50 rounds because aucpr on a small, ~4%-positive
+#      per-fold split is noisy -- a badly underfit model (0.527 -> 0.467 F1).
+#   2. A 5-config hyperparameter grid (deeper trees, more estimators, tuned
+#      learning rate) picked a config with higher CV score but slightly WORSE
+#      held-out test F1 (0.527 -> 0.525), at 6x the runtime. LogReg (0.535-0.538),
+#      this config (0.527-0.528), and Lohit's SVM (0.529-0.537) all land in the
+#      same F1~0.52-0.54 band regardless of algorithm -- the PCA-compressed
+#      feature representation is the ceiling here, not classifier capacity.
+# Kept as a single fixed config accordingly.
+XGB_PARAM_GRID = [
+    {"max_depth": 6, "learning_rate": 0.10, "n_estimators": 300},
+]
+
+
+def make_model(model_name, y_tr=None, xgb_params=None):
     if model_name == "logreg":
         return LogisticRegression(
             class_weight="balanced", max_iter=2000, random_state=RANDOM_STATE
         )
     elif model_name == "xgboost":
         from xgboost import XGBClassifier
+        # scale_pos_weight from the ACTUAL fold's fail rate, not a fixed
+        # constant -- the module-level SCALE_POS_WEIGHT (whole-dataset ratio)
+        # is used only as a fallback when y_tr isn't supplied.
+        if y_tr is not None:
+            n_pos = int(y_tr.sum())
+            n_neg = len(y_tr) - n_pos
+            spw = n_neg / max(n_pos, 1)
+        else:
+            spw = SCALE_POS_WEIGHT
+        params = dict(xgb_params or {"max_depth": 6, "learning_rate": 0.1, "n_estimators": 300})
         return XGBClassifier(
-            scale_pos_weight=SCALE_POS_WEIGHT,
+            scale_pos_weight=spw,
             tree_method="hist",
             device="cuda",
-            n_estimators=300,
-            max_depth=6,
-            learning_rate=0.1,
             eval_metric="aucpr",
             random_state=RANDOM_STATE,
+            **params,
         )
     raise ValueError(model_name)
 
@@ -131,38 +157,51 @@ def best_threshold(y_true, y_prob):
 
 def cross_validate(X_param, X_spatial, X_block, y, groups, stage, model_name):
     """
-    Run GroupKFold(5). For each candidate PCA component count, collect
-    out-of-fold predicted probabilities, then pick (n_components, threshold)
-    that maximizes fail-class F1 across all OOF predictions pooled together.
+    Run GroupKFold(5). For each candidate PCA component count -- and, for
+    XGBoost, each fixed hyperparameter config in XGB_PARAM_GRID -- collect
+    out-of-fold predicted probabilities, then pick the (n_components,
+    hyperparams, threshold) combo that maximizes fail-class F1 across all OOF
+    predictions pooled together. Each fold uses the same fixed n_estimators
+    (no early stopping -- see XGB_PARAM_GRID's docstring for why).
     """
     gkf = GroupKFold(n_splits=N_SPLITS)
-    results_by_ncomp = {}
+    hp_grid = XGB_PARAM_GRID if model_name == "xgboost" else [None]
+    results = {}
 
     for n_param in PCA_CANDIDATES:
         n_block = min(n_param, 100) if stage == "B" else None
-        oof_prob = np.zeros(len(y), dtype=np.float64)
 
-        for fold, (tr_idx, va_idx) in enumerate(gkf.split(X_param, y, groups)):
-            Xb_tr = X_block[tr_idx] if stage == "B" else None
-            Xb_va = X_block[va_idx] if stage == "B" else None
-            X_tr, X_va = build_representation(
-                X_param[tr_idx], X_spatial[tr_idx], Xb_tr,
-                X_param[va_idx], X_spatial[va_idx], Xb_va,
-                stage, n_param, n_block,
-            )
-            model = make_model(model_name)
-            model.fit(X_tr, y[tr_idx])
-            oof_prob[va_idx] = model.predict_proba(X_va)[:, 1]
-            del Xb_tr, Xb_va, X_tr, X_va, model
-            gc.collect()
+        for hp in hp_grid:
+            oof_prob = np.zeros(len(y), dtype=np.float64)
 
-        t, f1 = best_threshold(y, oof_prob)
-        results_by_ncomp[n_param] = {"threshold": t, "f1": f1, "n_block": n_block}
-        print(f"  [CV] stage={stage} n_param={n_param} n_block={n_block} "
-              f"OOF fail-F1={f1:.4f} threshold={t:.3f}")
+            for fold, (tr_idx, va_idx) in enumerate(gkf.split(X_param, y, groups)):
+                Xb_tr = X_block[tr_idx] if stage == "B" else None
+                Xb_va = X_block[va_idx] if stage == "B" else None
+                X_tr, X_va = build_representation(
+                    X_param[tr_idx], X_spatial[tr_idx], Xb_tr,
+                    X_param[va_idx], X_spatial[va_idx], Xb_va,
+                    stage, n_param, n_block,
+                )
+                y_tr_fold = y[tr_idx]
+                model = make_model(model_name, y_tr=y_tr_fold, xgb_params=hp)
+                model.fit(X_tr, y_tr_fold)
+                oof_prob[va_idx] = model.predict_proba(X_va)[:, 1]
+                del Xb_tr, Xb_va, X_tr, X_va, model
+                gc.collect()
 
-    best_n = max(results_by_ncomp, key=lambda k: results_by_ncomp[k]["f1"])
-    return best_n, results_by_ncomp[best_n]
+            t, f1 = best_threshold(y, oof_prob)
+            key = (n_param, tuple(sorted(hp.items())) if hp else None)
+            results[key] = {
+                "n_param": n_param, "n_block": n_block, "hp": hp,
+                "threshold": t, "f1": f1,
+            }
+            hp_str = f" hp={hp}" if hp else ""
+            print(f"  [CV] stage={stage} n_param={n_param} n_block={n_block}{hp_str} "
+                  f"OOF fail-F1={f1:.4f} threshold={t:.3f}")
+
+    best_key = max(results, key=lambda k: results[k]["f1"])
+    best = results[best_key]
+    return best["n_param"], best
 
 
 def evaluate(y_true, y_prob, threshold):
@@ -231,7 +270,8 @@ def main():
         X_param_tr, X_spatial_tr, X_block_tr, y_tr, groups_tr, args.stage, args.model
     )
     cv_time = time.time() - t1
-    print(f"Best n_param={best_n} (n_block={cv_result['n_block']}), "
+    hp_str = f", hp={cv_result['hp']}" if cv_result.get("hp") else ""
+    print(f"Best n_param={best_n} (n_block={cv_result['n_block']}{hp_str}), "
           f"CV fail-F1={cv_result['f1']:.4f}, threshold={cv_result['threshold']:.3f}, "
           f"CV wall time={cv_time:.1f}s")
 
@@ -242,7 +282,7 @@ def main():
         X_param_te, X_spatial_te, X_block_te,
         args.stage, best_n, cv_result["n_block"],
     )
-    model = make_model(args.model)
+    model = make_model(args.model, y_tr=y_tr, xgb_params=cv_result.get("hp"))
     model.fit(X_tr_final, y_tr)
     train_time = time.time() - t2
 
@@ -253,6 +293,8 @@ def main():
     metrics["n_components_block"] = cv_result["n_block"]
     metrics["preprocessing_time_min"] = round(load_time / 60, 2)
     metrics["actual_training_time_min"] = round(train_time / 60, 2)
+    if cv_result.get("hp"):
+        metrics["xgb_hyperparams"] = cv_result["hp"]
 
     print("\n=== FINAL TEST METRICS (frozen model, scored once) ===")
     print(json.dumps(metrics, indent=2))
