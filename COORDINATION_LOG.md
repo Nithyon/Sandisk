@@ -124,3 +124,27 @@ This is an append-only, chronological record shared by Claude and Codex. New ent
 - Base commit: `0457c0c`
 - Checkpoint commit: Pending; the next chronological entry must record the resulting hash.
 - Blocker/handoff: User must choose a destination with adequate free space (for example another drive) before Codex installs `kagglehub` and downloads the dataset.
+
+## 2026-09-06T13:21:27+05:30 - Codex - D-DRIVE DATASET AND SETUP MOVE
+
+- User prompt (redacted): "then use d drive"; followed by "move the whole setup to D drive"
+- Agent response/decision summary: Installed `kagglehub 1.0.2`, downloaded and extracted WM-811K to `D:\Datasets\wm811k`, verified the 811,457-row legacy pickle through the generator's compatibility path, added a portable `WM811K_PATH` override, and began a safe move of the complete repository setup to `D:\Sandisk`. The D-drive dataset path is not committed into shared configuration.
+- Intended action: Preserve the verified dataset configuration in Git, then move the complete Git checkout and virtual environment from C to D without overwriting an existing destination.
+- Checkpoint owner: Codex
+- Previous checkpoint commit: `97a3e01`
+- Files examined: Git status/history, `requirements.txt`, `generate_data.py`, `README.md`, `data/README.txt`, `COORDINATION_LOG.md`, `D:\Datasets\wm811k\LSWMD.pkl`, D-drive capacity, destination existence
+- Files changed: `requirements.txt`, `generate_data.py`, `README.md`, `data/README.txt`, `COORDINATION_LOG.md`
+- Commands and tests:
+  - `git status --short --branch; git log -2 --oneline --decorate; Get-Content -LiteralPath .\COORDINATION_LOG.md -Tail 16; Get-PSDrive -Name D | Select-Object Name,Root,@{Name='FreeGB';Expression={[math]::Round($_.Free/1GB,2)}}` -> PASS (exit code 0); repository was clean at `97a3e01` and D had 899 GB free
+  - `.\venv\Scripts\python.exe -m pip install kagglehub` -> PASS (exit status confirmed by subsequent import); command return was interrupted, but `kagglehub 1.0.2` was confirmed installed afterward
+  - `New-Item -ItemType Directory -Force -Path 'D:\Datasets\wm811k'; $env:KAGGLEHUB_CACHE = 'D:\KaggleHubCache'; .\venv\Scripts\python.exe -c "import kagglehub; path = kagglehub.dataset_download('qingyi/wm811k-wafer-map', output_dir=r'D:\Datasets\wm811k'); print('DATASET_PATH=' + path)"` -> PASS (exit code 0); downloaded 149 MB and extracted to `D:\Datasets\wm811k`
+  - `Get-Item -LiteralPath 'D:\Datasets\wm811k\LSWMD.pkl'; <legacy pickle load>` -> FAIL (exit code 1); direct load first raised `ModuleNotFoundError: pandas.indexes`
+  - `<pandas.indexes compatibility alias + pickle.load>` -> FAIL (exit code 1); module alias resolved the first error and exposed a legacy `UnicodeDecodeError`
+  - `<pandas.indexes compatibility alias + pickle.load(encoding='latin1')>` -> PASS (exit code 0); dataset is a DataFrame with 811,457 rows and expected WM-811K columns
+  - `.\venv\Scripts\python.exe -m py_compile generate_data.py; .\venv\Scripts\python.exe -m pip check; $env:WM811K_PATH = 'D:\Datasets\wm811k\LSWMD.pkl'; <load through generate_data.load_wm811k>` -> PASS (exit code 0); no broken requirements; generator found 25,519 labeled-failure and 147,431 none-type wafers
+  - `git status --short --branch; Get-Item -LiteralPath 'C:\Users\saini\Documents\ChatGPT\Sandisk'; Test-Path 'D:\Sandisk'; Get-PSDrive -Name D` -> PASS (exit code 0); current repository has only this checkpoint's changes and `D:\Sandisk` is absent
+- Result: PASS (dataset setup complete; repository move pending)
+- Important output/error: The copied code must use `kagglehub.dataset_download`, not Markdown-escaped `dataset\_download`. WM-811K is intentionally outside Git. The generator now accepts `WM811K_PATH` so each collaborator can choose a local dataset path.
+- Base commit: `97a3e01`
+- Checkpoint commit: Pending; this checkpoint will be committed before moving the checkout.
+- Blocker/handoff: None. After the commit, move `C:\Users\saini\Documents\ChatGPT\Sandisk` to `D:\Sandisk`, then verify Git and the virtual environment from the new path.
