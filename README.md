@@ -90,3 +90,32 @@ W_F_0001,5,13,1
 ```
 
 - `predicted_label`: 0=pass, 1=fail (for ALL dies, including old fails)
+
+## Final Model A / Model B deliverables
+
+The final reproducibility build uses Logistic Regression for both models so the
+effect of adding block readings is isolated from the classifier choice:
+
+- Model A: PCA-compressed die measurements plus spatial context.
+- Model B: the complete Model A representation plus a separate PCA of the
+  2,000 block readings.
+
+Build the fitted models, shared-test comparison, probability files, and
+interpretability outputs with:
+
+```powershell
+.\venv\Scripts\python.exe build_final_deliverables.py
+```
+
+Apply either saved model to a CSV such as the unlabeled validation split with:
+
+```powershell
+.\venv\Scripts\python.exe predict_final_models.py `
+  --model deliverables\models\model_A_logreg.joblib `
+  --input input\validation.csv `
+  --output deliverables\predictions\validation_probabilities_model_A.csv
+```
+
+See `deliverables/README.md` for the complete artifact map and
+`deliverables/FINAL_ANALYSIS.md` for the Model A/B, imbalance, overlap, and
+interpretability conclusions.

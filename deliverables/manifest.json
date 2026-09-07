@@ -1,0 +1,51 @@
+{
+  "generated_seconds": 39.74474339999142,
+  "train_eligible_rows": 154037,
+  "test_eligible_rows": 32598,
+  "model_A": {
+    "model": "Model A",
+    "fail_f1": 0.5351681957186545,
+    "precision": 0.9020618556701031,
+    "recall": 0.3804347826086957,
+    "pr_auc": 0.5322258596880342,
+    "roc_auc": 0.8648967499240962,
+    "accuracy": 0.9720228234861035,
+    "threshold": 0.9,
+    "tn": 31161,
+    "fp": 57,
+    "fn": 855,
+    "tp": 525
+  },
+  "model_B": {
+    "model": "Model B",
+    "fail_f1": 0.5377405032067094,
+    "precision": 0.8423493044822257,
+    "recall": 0.39492753623188404,
+    "pr_auc": 0.5499919554285874,
+    "roc_auc": 0.8789309934532382,
+    "accuracy": 0.971255905270262,
+    "threshold": 0.9,
+    "tn": 31116,
+    "fp": 102,
+    "fn": 835,
+    "tp": 545
+  },
+  "files": [
+    "FINAL_ANALYSIS.md",
+    "README.md",
+    "model_comparison.csv",
+    "models\\model_A_logreg.joblib",
+    "models\\model_B_logreg.joblib",
+    "predictions\\test_probabilities_model_A.csv",
+    "predictions\\test_probabilities_model_B.csv",
+    "predictions\\validation_probabilities_model_A.csv",
+    "predictions\\validation_probabilities_model_B.csv",
+    "reports\\class_imbalance_and_probability_overlap.png",
+    "reports\\model_A_per_die_contributions.csv",
+    "reports\\model_A_per_die_explanation.png",
+    "reports\\model_A_spatial_contribution.png",
+    "reports\\model_A_vs_B_metrics.png",
+    "reports\\model_B_block_component_importance.csv",
+    "reports\\model_B_block_pattern_analysis.png"
+  ]
+}
