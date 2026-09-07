@@ -1,5 +1,5 @@
 {
-  "generated_seconds": 39.74474339999142,
+  "generated_seconds": 40.984968300006585,
   "train_eligible_rows": 154037,
   "test_eligible_rows": 32598,
   "model_A": {
@@ -33,6 +33,7 @@
   "files": [
     "FINAL_ANALYSIS.md",
     "README.md",
+    "manifest.json",
     "model_comparison.csv",
     "models\\model_A_logreg.joblib",
     "models\\model_B_logreg.joblib",
@@ -46,6 +47,10 @@
     "reports\\model_A_spatial_contribution.png",
     "reports\\model_A_vs_B_metrics.png",
     "reports\\model_B_block_component_importance.csv",
-    "reports\\model_B_block_pattern_analysis.png"
+    "reports\\model_B_block_pattern_analysis.png",
+    "reports\\model_B_block_position_analysis.csv",
+    "reports\\model_B_per_die_block_contributions.png",
+    "reports\\model_imbalance_operating_tradeoffs.png",
+    "reports\\model_imbalance_overlap_comparison.csv"
   ]
 }

@@ -93,17 +93,21 @@ def comparison_plot(comparison: pd.DataFrame) -> None:
 
 
 def explanation_outputs(model_a, model_b, x_a_test, x_b_test, spatial_test,
-                        block_test, y_test, probability_a, probability_b, meta_test):
+                        raw_param_test, param_transform, block_test, block_transform,
+                        y_test, probability_a, probability_b, meta_test):
     report_dir = OUT / "reports"
-    feature_a = [f"param_pc_{i + 1}" for i in range(N_PARAM_COMPONENTS)] + [
-        "spatial_neighbor_fail_density", "spatial_radial_distance"
-    ]
-    feature_b = feature_a + [f"block_pc_{i + 1}" for i in range(N_BLOCK_COMPONENTS)]
-
     fail_indices = np.flatnonzero(y_test == 1)
     selected = int(fail_indices[np.argmax(probability_a[fail_indices])])
-    contributions = x_a_test[selected] * model_a.coef_[0]
-    per_die = pd.DataFrame({"feature": feature_a, "contribution": contributions})
+    param_scaled = (raw_param_test[selected] - param_transform["mean"]) / param_transform["std"]
+    param_centered = param_scaled - param_transform["pca"].mean_
+    original_param_coef = param_transform["pca"].components_.T @ model_a.coef_[0][:N_PARAM_COMPONENTS]
+    param_contributions = param_centered * original_param_coef
+    spatial_contributions = spatial_test[selected] * model_a.coef_[0][N_PARAM_COMPONENTS:N_PARAM_COMPONENTS + 2]
+    original_features = [f"feature_{i + 1}" for i in range(raw_param_test.shape[1])] + [
+        "spatial_neighbor_fail_density", "spatial_radial_distance"
+    ]
+    contributions = np.concatenate([param_contributions, spatial_contributions])
+    per_die = pd.DataFrame({"feature": original_features, "contribution": contributions})
     per_die["absolute_contribution"] = per_die["contribution"].abs()
     per_die = per_die.sort_values("absolute_contribution", ascending=False)
     per_die.to_csv(report_dir / "model_A_per_die_contributions.csv", index=False)
@@ -147,6 +151,10 @@ def explanation_outputs(model_a, model_b, x_a_test, x_b_test, spatial_test,
     pass_mean = block_test[pass_sample].mean(axis=0)
     difference = fail_mean - pass_mean
     block_importance = model_b.coef_[0][-N_BLOCK_COMPONENTS:]
+    original_block_coef = block_transform["pca"].components_.T @ block_importance
+    selected_block_scaled = (block_test[selected] - block_transform["mean"]) / block_transform["std"]
+    selected_block_centered = selected_block_scaled - block_transform["pca"].mean_
+    selected_block_contribution = selected_block_centered * original_block_coef
     fig, axes = plt.subplots(2, 1, figsize=(12, 8))
     axes[0].plot(pass_mean, label="Stayed pass", linewidth=1.2)
     axes[0].plot(fail_mean, label="New failure", linewidth=1.2)
@@ -169,6 +177,29 @@ def explanation_outputs(model_a, model_b, x_a_test, x_b_test, spatial_test,
     }).sort_values("absolute_coefficient", ascending=False).to_csv(
         report_dir / "model_B_block_component_importance.csv", index=False
     )
+    block_positions = pd.DataFrame({
+        "block_position": np.arange(1, len(original_block_coef) + 1),
+        "model_coefficient": original_block_coef,
+        "selected_die_contribution": selected_block_contribution,
+        "pass_mean": pass_mean,
+        "new_failure_mean": fail_mean,
+        "class_mean_difference": difference,
+    })
+    block_positions["absolute_selected_die_contribution"] = block_positions["selected_die_contribution"].abs()
+    block_positions.to_csv(report_dir / "model_B_block_position_analysis.csv", index=False)
+    top_blocks = block_positions.nlargest(25, "absolute_selected_die_contribution").sort_values(
+        "selected_die_contribution"
+    )
+    fig, ax = plt.subplots(figsize=(10, 8))
+    colors = np.where(top_blocks["selected_die_contribution"] >= 0, "#c62828", "#2e7d32")
+    ax.barh(top_blocks["block_position"].astype(str), top_blocks["selected_die_contribution"], color=colors)
+    ax.axvline(0, color="black", linewidth=0.8)
+    ax.set_title("Model B per-die block-position contributions")
+    ax.set_xlabel("Log-odds contribution (red raises failure risk)")
+    ax.set_ylabel("Block-reading position")
+    fig.tight_layout()
+    fig.savefig(report_dir / "model_B_per_die_block_contributions.png", dpi=180)
+    plt.close(fig)
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5), sharey=True)
     for ax, title, probability in zip(axes, ["Model A", "Model B"], [probability_a, probability_b]):
@@ -183,6 +214,48 @@ def explanation_outputs(model_a, model_b, x_a_test, x_b_test, spatial_test,
     fig.tight_layout()
     fig.savefig(report_dir / "class_imbalance_and_probability_overlap.png", dpi=180)
     plt.close(fig)
+
+
+def imbalance_outputs(result_a: dict, result_b: dict, prevalence: float) -> pd.DataFrame:
+    rows = []
+    for result in [result_a, result_b]:
+        tn, fp, fn, tp = result["tn"], result["fp"], result["fn"], result["tp"]
+        rows.append({
+            "model": result["model"],
+            "failures_found_tp": tp,
+            "failures_missed_fn": fn,
+            "false_alerts_fp": fp,
+            "passes_correct_tn": tn,
+            "predicted_failures": tp + fp,
+            "precision": result["precision"],
+            "recall": result["recall"],
+            "specificity": tn / (tn + fp),
+            "false_positive_rate": fp / (tn + fp),
+            "fail_f1": result["fail_f1"],
+            "pr_auc": result["pr_auc"],
+            "pr_auc_lift_over_prevalence": result["pr_auc"] / prevalence,
+        })
+    frame = pd.DataFrame(rows)
+    frame.to_csv(OUT / "reports" / "model_imbalance_overlap_comparison.csv", index=False)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.8))
+    frame.set_index("model")[["failures_found_tp", "failures_missed_fn", "false_alerts_fp"]].plot(
+        kind="bar", ax=axes[0], rot=0, color=["#2e7d32", "#ef6c00", "#c62828"]
+    )
+    axes[0].set_title("Rare-failure operating outcomes")
+    axes[0].set_ylabel("Eligible test dies")
+    axes[0].legend(["Failures found", "Failures missed", "False alerts"])
+    frame.set_index("model")[["precision", "recall", "fail_f1", "pr_auc"]].plot(
+        kind="bar", ax=axes[1], rot=0
+    )
+    axes[1].set_title("Performance under class overlap")
+    axes[1].set_ylim(0, 1)
+    axes[1].set_ylabel("Score")
+    axes[1].grid(axis="y", alpha=0.2)
+    fig.tight_layout()
+    fig.savefig(OUT / "reports" / "model_imbalance_operating_tradeoffs.png", dpi=180)
+    plt.close(fig)
+    return frame
 
 
 def main() -> None:
@@ -243,14 +316,20 @@ def main() -> None:
     save_probability_file(test["meta"], test_mask, y_test, probability_b, "model_B")
     comparison_plot(comparison)
     explanation_outputs(
-        model_a, model_b, x_a_test, x_b_test, spatial_test, block_test, y_test,
-        probability_a, probability_b, test_meta,
+        model_a, model_b, x_a_test, x_b_test, spatial_test,
+        test["X_param"][test_mask], param_transform, block_test, block_transform,
+        y_test, probability_a, probability_b, test_meta,
     )
 
     fail_count = int(y_test.sum())
     pass_count = int(len(y_test) - fail_count)
+    prevalence = fail_count / len(y_test)
+    imbalance = imbalance_outputs(result_a, result_b, prevalence)
     delta_f1 = result_b["fail_f1"] - result_a["fail_f1"]
     delta_pr = result_b["pr_auc"] - result_a["pr_auc"]
+    delta_tp = result_b["tp"] - result_a["tp"]
+    delta_fp = result_b["fp"] - result_a["fp"]
+    row_a, row_b = imbalance.iloc[0], imbalance.iloc[1]
     report = f"""# Final Model A / Model B analysis
 
 ## Input and output contract
@@ -270,16 +349,22 @@ Adding block readings changed Fail-F1 by {delta_f1:+.6f} and PR-AUC by {delta_pr
 
 ## Imbalance and overlapping distributions
 
-The eligible test population contains {fail_count:,} new failures and {pass_count:,} passes, a failure prevalence of {fail_count / len(y_test):.2%}. Accuracy is therefore dominated by passes and cannot be used alone. Fail-F1 measures the precision/recall trade-off at the frozen threshold, while PR-AUC measures ranking quality across thresholds and is the main threshold-independent metric for the rare failure class.
+The eligible test population contains {fail_count:,} new failures and {pass_count:,} passes, a failure prevalence of {prevalence:.2%}. Accuracy is therefore dominated by passes and cannot be used alone. Fail-F1 measures the precision/recall trade-off at the frozen threshold, while PR-AUC measures ranking quality across thresholds and is the main threshold-independent metric for the rare failure class.
 
-The probability-overlap figure shows that many new failures receive scores in the same range as passes. This is consistent with `marginal_fail_fraction: 0.65`: most synthetic failures were deliberately generated to be close to the pass distribution. Class balancing helps the model pay attention to the rare class, but it cannot fully separate observations whose features overlap. The high precision and lower recall show the frozen threshold favors reliable failure alerts while missing a substantial fraction of subtle failures.
+Both models use balanced class weights during training so the 4.23% failure class contributes equally to the loss despite being rare. The probability-overlap figure shows that many new failures receive scores in the same range as passes. This is consistent with `marginal_fail_fraction: 0.65`: most synthetic failures were deliberately generated to be close to the pass distribution. Class balancing raises attention to failures, but it cannot fully separate observations whose measured features overlap.
+
+At the frozen 0.90 threshold, Model A found {result_a['tp']:,} failures, missed {result_a['fn']:,}, and produced {result_a['fp']:,} false alerts. Its precision was {result_a['precision']:.2%} and recall was {result_a['recall']:.2%}. Its PR-AUC was {row_a['pr_auc_lift_over_prevalence']:.1f} times the random-ranking baseline of {prevalence:.2%}.
+
+Model B found {result_b['tp']:,} failures, missed {result_b['fn']:,}, and produced {result_b['fp']:,} false alerts. Adding block readings recovered {delta_tp:+d} additional failures and created {delta_fp:+d} additional false alerts. Recall increased to {result_b['recall']:.2%}, precision decreased to {result_b['precision']:.2%}, and PR-AUC reached {row_b['pr_auc_lift_over_prevalence']:.1f} times the prevalence baseline. Model B therefore ranks subtle failures better overall, while its fixed operating point accepts more false alerts to find more failures.
 
 ## Interpretation artifacts
 
-- `reports/model_A_per_die_explanation.png` explains one high-confidence failed die through signed feature contributions.
+- `reports/model_A_per_die_explanation.png` explains one high-confidence failed die through signed contributions back-projected to the original `feature_1` through `feature_500` inputs.
 - `reports/model_A_spatial_contribution.png` maps the spatial part of Model A across a wafer.
 - `reports/model_B_block_pattern_analysis.png` compares the 2,000-reading profiles of new failures and passes.
-- `reports/model_B_block_component_importance.csv` ranks the block PCA components used by Model B.
+- `reports/model_B_per_die_block_contributions.png` identifies the individual block positions that drove one die's Model B prediction.
+- `reports/model_B_block_position_analysis.csv` combines model coefficients, per-die contributions, and pass/failure class means for all 2,000 block positions.
+- `reports/model_imbalance_operating_tradeoffs.png` and its CSV compare how each model handles rare, overlapping failures at the frozen threshold.
 
 These are reproducibility results. The shared test set had already been evaluated during earlier experiments; this build packages the frozen models and regenerates their artifacts rather than claiming a new untouched test evaluation.
 """
