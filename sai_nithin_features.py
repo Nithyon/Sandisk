@@ -17,6 +17,7 @@ Caching: building spatial features and parsing the 2000-value block_readings str
 column is the expensive part of preprocessing. Results are cached to `cache/` as
 .npz/.parquet so it is paid once, matching the tracker's "cache it" instruction.
 """
+import hashlib
 import os
 import time
 import numpy as np
@@ -31,6 +32,14 @@ FEATURE_COLS = [f"feature_{i}" for i in range(1, 501)]
 
 def _cache_path(name):
     return os.path.join(CACHE_DIR, name)
+
+
+def _source_cache_key(csv_path, nrows):
+    """Identify the exact source slice used to build cached derived arrays."""
+    source = os.path.realpath(os.fspath(csv_path))
+    stat = os.stat(source)
+    identity = f"{source}|{stat.st_size}|{stat.st_mtime_ns}|{nrows}"
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
 
 
 def build_spatial_features(df):
@@ -99,7 +108,7 @@ def parse_block_readings(series, k=2000, dtype=np.float32):
     return out
 
 
-def load_split(csv_path, cache_tag, need_blocks, nrows=None):
+def load_split(csv_path, cache_tag, need_blocks, nrows=None, require_label=True):
     """
     Load one CSV (train.csv or test.csv), build spatial features on the FULL wafer,
     then return everything needed downstream. Caches parsed block matrix and
@@ -115,12 +124,17 @@ def load_split(csv_path, cache_tag, need_blocks, nrows=None):
     timings = {}
     t0 = time.time()
 
-    usecols = ["wafer_id", "die_row", "die_col", "old_label", "label"] + FEATURE_COLS
+    metadata_columns = ["wafer_id", "die_row", "die_col", "old_label"]
+    if require_label:
+        metadata_columns.append("label")
+    usecols = metadata_columns + FEATURE_COLS
     if need_blocks:
         usecols.append("block_readings")
 
     dtypes = {c: "float32" for c in FEATURE_COLS}
-    dtypes.update({"die_row": "int32", "die_col": "int32", "old_label": "int8", "label": "int8"})
+    dtypes.update({"die_row": "int32", "die_col": "int32", "old_label": "int8"})
+    if require_label:
+        dtypes["label"] = "int8"
     if need_blocks:
         # pandas 3.x defaults text columns to a PyArrow-backed string array, which
         # tries to materialize the entire ~2000-value block_readings column as one
@@ -132,13 +146,17 @@ def load_split(csv_path, cache_tag, need_blocks, nrows=None):
     df = pd.read_csv(csv_path, usecols=usecols, dtype=dtypes, nrows=nrows)
     timings["read_csv"] = time.time() - t0
 
-    meta = df[["wafer_id", "die_row", "die_col", "old_label", "label"]].reset_index(drop=True)
+    meta = df[metadata_columns].reset_index(drop=True)
     X_param = df[FEATURE_COLS].to_numpy(dtype=np.float32)
 
-    spatial_cache = _cache_path(f"{cache_tag}_spatial.npz")
+    source_key = _source_cache_key(csv_path, nrows)
+    spatial_cache = _cache_path(f"{cache_tag}_{source_key}_spatial.npz")
+    os.makedirs(CACHE_DIR, exist_ok=True)
     t1 = time.time()
     if os.path.exists(spatial_cache):
         X_spatial = np.load(spatial_cache)["spatial"]
+        if X_spatial.shape != (len(df), 2):
+            raise ValueError(f"invalid spatial cache shape in {spatial_cache}: {X_spatial.shape}")
     else:
         spatial_df = build_spatial_features(df)
         X_spatial = spatial_df.to_numpy(dtype=np.float32)
@@ -147,10 +165,12 @@ def load_split(csv_path, cache_tag, need_blocks, nrows=None):
 
     X_block = None
     if need_blocks:
-        block_cache = _cache_path(f"{cache_tag}_blocks.npz")
+        block_cache = _cache_path(f"{cache_tag}_{source_key}_blocks.npz")
         t2 = time.time()
         if os.path.exists(block_cache):
             X_block = np.load(block_cache)["blocks"]
+            if X_block.shape != (len(df), 2000):
+                raise ValueError(f"invalid block cache shape in {block_cache}: {X_block.shape}")
         else:
             X_block = parse_block_readings(df["block_readings"])
             np.savez_compressed(block_cache, blocks=X_block)

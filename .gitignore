@@ -2,7 +2,7 @@ venv/
 __pycache__/
 *.pyc
 input/
-data/LSWMD.pkl
+**/data/LSWMD.pkl
 cache/
 results_*.json
 

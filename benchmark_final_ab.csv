@@ -1,0 +1,3 @@
+stage,model_name,fail_f1,precision,recall,pr_auc,roc_auc,accuracy,threshold,param_pca_components,block_pca_components,runtime_seconds,submission,model_artifact
+A,PCA + Logistic Regression,0.5294564391884561,0.9043736100815419,0.3742905353581838,0.5232635786209496,0.8515284765475675,0.971844426988321,0.9,100,,22.66229271888733,submission_pca_logreg_a.csv,models\pca_logreg_model_a.joblib
+B,PCA + Logistic Regression,0.5344410558418341,0.8498327759197324,0.38978370915784627,0.5412107893224002,0.8653484971196592,0.9712601517817148,0.9,100,100.0,135.51416063308716,submission_pca_logreg_b.csv,models\pca_logreg_model_b.joblib

@@ -157,9 +157,11 @@ def cross_validate(X_param, X_spatial, X_block, y, groups, stage, model_name):
             gc.collect()
 
         t, f1 = best_threshold(y, oof_prob)
-        results_by_ncomp[n_param] = {"threshold": t, "f1": f1, "n_block": n_block}
+        metrics = evaluate(y, oof_prob, t)
+        metrics.update({"threshold": t, "n_block": n_block})
+        results_by_ncomp[n_param] = metrics
         print(f"  [CV] stage={stage} n_param={n_param} n_block={n_block} "
-              f"OOF fail-F1={f1:.4f} threshold={t:.3f}")
+              f"OOF fail-F1={metrics['f1']:.4f} threshold={t:.3f}")
 
     best_n = max(results_by_ncomp, key=lambda k: results_by_ncomp[k]["f1"])
     return best_n, results_by_ncomp[best_n]
